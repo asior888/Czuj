@@ -4,8 +4,6 @@ import shutil
 import subprocess
 import tempfile
 
-import edge_tts
-
 import config
 
 # Odtwarzacze po kolei; bierzemy pierwszy, który istnieje na urządzeniu
@@ -19,6 +17,8 @@ _PLAYERS = [
 
 
 async def _synthesize(text, path):
+    import edge_tts
+
     await edge_tts.Communicate(text, config.TTS_VOICE).save(path)
 
 
@@ -42,6 +42,8 @@ def speak(text):
     try:
         asyncio.run(_synthesize(text, path))
         subprocess.run(player + [path], check=False)
+    except Exception as e:
+        print("[głos niedostępny]", e, "| Czuj mówi:", text)
     finally:
         os.remove(path)
 

@@ -21,8 +21,16 @@ Reguła alarmu: ten sam tracker, widziany >= 4 razy, >= 25 min, w >= 2 miejscach
   i jako asystent głosowy.
 - Budowa bez Maca: GitHub Actions (macOS), podpis wymaga konta Apple Developer (99 USD/rok).
 
-## Linux (start)
-cd linux && pip install -r requirements.txt
-Klucze jako zmienne środowiskowe (nigdy w repo):
-export ANTHROPIC_API_KEY="..."  export GROQ_API_KEY="..."
-Testy: python stt.py | python tts.py | python brain.py | python scanner.py
+## Linux: instalacja (Raspberry Pi OS, Debian, Ubuntu)
+```
+cd linux
+./install.sh              # podstawa
+./install.sh --wake       # + słowo "Czuj" offline (Vosk, ok. 50 MB)
+./install.sh --service    # + start razem z systemem
+nano ~/.czuj/env          # klucze: ANTHROPIC_API_KEY, GROQ_API_KEY
+.venv/bin/python main.py --caps   # co działa na tym urządzeniu
+.venv/bin/python main.py          # start
+```
+Każda funkcja jest wykrywana osobno. Brak mikrofonu, klucza czy Bluetooth = ta funkcja
+wyłączona (z powodem w `--caps`), reszta działa. Bez klucza Anthropic: brak rozmowy,
+skaner i alarmy głosowe działają dalej. Alarmy: `~/.czuj/alerts.log`.

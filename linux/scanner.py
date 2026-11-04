@@ -114,12 +114,14 @@ async def scan_once(seconds=8):
     return out
 
 
-async def watch(on_alert, interval=60):
+async def watch(on_alert, interval=60, status=None):
     """Pętla w tle: skan co `interval` s, alarmy idą do on_alert(tekst)."""
     tw = TrackerWatch()
     while True:
         try:
             sightings = await scan_once()
+            if status is not None:
+                status.update(last=time.time(), trackers=len(sightings))
             top = await asyncio.to_thread(wifi_top6)
             for text in tw.ingest(sightings, top):
                 on_alert(text)

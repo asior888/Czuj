@@ -7,7 +7,14 @@ from groq import Groq
 
 import config
 
-_client = Groq(api_key=config.GROQ_API_KEY)
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        _client = Groq(api_key=config.GROQ_API_KEY)
+    return _client
 
 
 def record(seconds=config.RECORD_SECONDS):
@@ -30,7 +37,7 @@ def record(seconds=config.RECORD_SECONDS):
 
 def transcribe(wav_bytes):
     """Wysyła WAV do Whispera na Groq, zwraca tekst."""
-    result = _client.audio.transcriptions.create(
+    result = _get_client().audio.transcriptions.create(
         file=("audio.wav", wav_bytes),
         model=config.STT_MODEL,
         language=config.LANGUAGE,

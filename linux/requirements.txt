@@ -4,3 +4,4 @@ numpy
 edge-tts
 anthropic
 bleak
+# opcjonalnie (slowo wybudzajace "Czuj", offline): pip install vosk
