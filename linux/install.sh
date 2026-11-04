@@ -29,6 +29,11 @@ if [ ! -f "$CZUJ/env" ]; then
 # Wpisz klucze po znaku = (bez spacji). Plik czyta tylko twój użytkownik.
 ANTHROPIC_API_KEY=
 GROQ_API_KEY=
+# Wspólna mapa (opcjonalnie): 1 = wysyłaj anonimowe alarmy (typ, dzień, kratka ok. 2 km)
+CZUJ_SHARE=0
+# Przybliżona pozycja urządzenia (Linux nie ma GPS), np. 53.70 i 17.56
+CZUJ_LAT=
+CZUJ_LON=
 ENV
   chmod 600 "$CZUJ/env"
   echo "== Utworzono $CZUJ/env: wpisz tam klucze (nano $CZUJ/env)"

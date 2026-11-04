@@ -23,6 +23,8 @@ struct ContentView: View {
     @State private var question = ""
     @State private var answer = "Zapytaj na przykład: czy ktoś mnie śledzi?"
     @State private var keyField = ""
+    @State private var share = Cloud.shared.share
+    @State private var nearby = ""
 
     private let bg = Color(red: 0x14 / 255, green: 0x17 / 255, blue: 0x22 / 255)
     private let card = Color(red: 0x1E / 255, green: 0x23 / 255, blue: 0x33 / 255)
@@ -60,6 +62,15 @@ struct ContentView: View {
                         .font(.subheadline)
                 }
                 section {
+                    label("Wspólna mapa (anonimowo)")
+                    Text("Wysyłam tylko: typ trackera, dzień i kratkę ok. 2 km. Bez adresów urządzeń, dokładnego miejsca i godziny. Mapa pokazuje kratki z co najmniej 3 różnych urządzeń, z opóźnieniem 2 dni.")
+                        .font(.footnote).foregroundColor(.secondary)
+                    Toggle("Udostępniaj alarmy", isOn: $share)
+                        .onChange(of: share) { v in Cloud.shared.share = v }
+                    action("Sprawdź okolicę (7 dni)") { checkNearby() }
+                    Text(nearby).font(.subheadline)
+                }
+                section {
                     label("Co działa na tym iPhonie")
                     capsView
                     SecureField("Klucz Anthropic (pusty + Zapisz = usuń)", text: $keyField)
@@ -80,6 +91,7 @@ struct ContentView: View {
             row(guardian.placeKnown, "Lokalizacja (odcisk miejsca)", "zezwól na lokalizację, bez niej alarmy nie zadziałają")
             row(listener.available, "Rozpoznawanie mowy", "pisz pytania")
             row(!Brain.shared.key.isEmpty, "Asystent AI", "bez klucza odpowiadam tylko o stanie skanera")
+            row(Cloud.configured, "Wspólna mapa", "baza jeszcze nie skonfigurowana")
             Text("ℹ️ W tle iOS pozwala szukać tylko Tile i SmartTag. AirTagi wykrywa sam iOS (ostrzeżenia systemowe).")
                 .font(.footnote).foregroundColor(.secondary)
         }.font(.subheadline)
@@ -87,6 +99,25 @@ struct ContentView: View {
 
     private func row(_ ok: Bool, _ name: String, _ why: String) -> some View {
         Text((ok ? "✅ " : "❌ ") + name + (!ok && !why.isEmpty ? ": " + why : ""))
+    }
+
+    private func checkNearby() {
+        guard Cloud.configured else { nearby = "Wspólna baza nie jest jeszcze skonfigurowana."; return }
+        guard let c = guardian.lastCoord else { nearby = "Nie znam przybliżonej pozycji. Włącz strażnika i lokalizację."; return }
+        nearby = "Sprawdzam…"
+        Task { @MainActor in
+            do {
+                if let n = try await Cloud.shared.nearby(lat: c.latitude, lon: c.longitude) {
+                    nearby = n.total == 0
+                        ? "W promieniu ok. 3 km brak alarmów (\(n.from) – \(n.to))."
+                        : "W promieniu ok. 3 km: \(n.total) alarmów (\(n.from) – \(n.to)). AirTag \(n.airtag), Tile \(n.tile), SmartTag \(n.smarttag)."
+                } else {
+                    nearby = "Mapa jeszcze pusta (liczy się raz na dobę)."
+                }
+            } catch {
+                nearby = "Nie udało się pobrać mapy: \(error.localizedDescription)"
+            }
+        }
     }
 
     private func send(_ raw: String) {

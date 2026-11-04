@@ -42,6 +42,7 @@ class GuardService : Service() {
         @Volatile var error = ""
             private set
         @Volatile private var placeKnown = true
+        @Volatile var cloudError = ""
         private val watch = TrackerCore.Watch()
 
         fun status(): Status {
@@ -121,7 +122,7 @@ class GuardService : Service() {
         val top = wifiTop6(now)
         placeKnown = top.isNotEmpty()
         val alert = synchronized(watch) { watch.sighting(r.device.address, tag, top, now) }
-        if (alert != null) onAlert(alert)
+        if (alert != null) onAlert(alert, tag)
     }
 
     private fun wifiTop6(now: Long): Set<String> {
@@ -138,11 +139,18 @@ class GuardService : Service() {
         }
     }
 
-    private fun onAlert(text: String) {
+    private fun onAlert(text: String, tag: String) {
         Store.addAlert(this, text)
         getSystemService(NotificationManager::class.java)
             ?.notify(alertId++, notification(CH_ALERT, "Czuj: możliwy tracker", text, true))
         Voice.say(text)
+        if (Cloud.configured && Store.share(this)) {
+            Where.locate(this) { loc ->
+                if (loc != null) Thread {
+                    try { Cloud.report(this, tag, loc.latitude, loc.longitude) } catch (e: Exception) { cloudError = "${e.message}" }
+                }.start()
+            }
+        }
     }
 
     private fun channels() {

@@ -20,6 +20,7 @@ final class Guard: NSObject, ObservableObject, CBCentralManagerDelegate, CLLocat
     private let speech = AVSpeechSynthesizer()
     private var foreground = true
     private var lastPlace: Set<String> = []
+    private(set) var lastCoord: CLLocationCoordinate2D?
     private let backgroundServices = ["FEED", "FEEC", "FD5A"].map { CBUUID(string: $0) }
 
     override init() {
@@ -90,6 +91,12 @@ final class Guard: NSObject, ObservableObject, CBCentralManagerDelegate, CLLocat
         let now = Date().timeIntervalSince1970
         if let alert = watch.sighting(addr: peripheral.identifier.uuidString, tag: tag, top: lastPlace, now: now) {
             raise(alert)
+            if let c = lastCoord, Cloud.configured, Cloud.shared.share {
+                Task { @MainActor in
+                    do { try await Cloud.shared.report(tag: tag, lat: c.latitude, lon: c.longitude) }
+                    catch { self.problem = "wysyłka do mapy: \(error.localizedDescription)" }
+                }
+            }
         }
         nearby = watch.nearby(now: now)
     }
@@ -104,6 +111,7 @@ final class Guard: NSObject, ObservableObject, CBCentralManagerDelegate, CLLocat
         var cells: Set<String> = []
         for dy in -1...1 { for dx in -1...1 { cells.insert("\(la + dy):\(lo + dx)") } }
         lastPlace = cells
+        lastCoord = l.coordinate
         placeKnown = true
     }
 

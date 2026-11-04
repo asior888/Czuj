@@ -16,6 +16,7 @@ NAMES = {
     "speaker": "głos (odtwarzanie)",
     "scan": "skaner trackerów",
     "wake": 'słowo wybudzające "Czuj"',
+    "cloud": "wspólna mapa (wysyłka)",
 }
 
 
@@ -79,6 +80,18 @@ def _wake():
     return True, ""
 
 
+def _cloud():
+    import cloud
+
+    if not cloud.configured():
+        return False, "baza nie skonfigurowana (config.py)"
+    if not cloud.sharing():
+        return False, "brak zgody (CZUJ_SHARE=1 w ~/.czuj/env)"
+    if not cloud.my_position():
+        return False, "brak pozycji (CZUJ_LAT, CZUJ_LON w ~/.czuj/env)"
+    return True, ""
+
+
 def detect():
     return {
         "mic": _mic(),
@@ -87,6 +100,7 @@ def detect():
         "speaker": _speaker(),
         "scan": _scan(),
         "wake": _wake(),
+        "cloud": _cloud(),
     }
 
 

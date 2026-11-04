@@ -38,11 +38,18 @@ def local_answer(status, alerts):
             f"Trackerów w zasięgu: {status.get('trackers', 0)}.")
 
 
-def start_scanner(alerts, status, interval):
+def start_scanner(alerts, status, interval, share):
     import scanner
 
+    def on_alert(text):
+        alerts.push(text)
+        if share:
+            import cloud
+
+            cloud.report_async(text)
+
     def run():
-        asyncio.run(scanner.watch(alerts.push, interval, status))
+        asyncio.run(scanner.watch(on_alert, interval, status))
 
     threading.Thread(target=run, daemon=True).start()
 
@@ -121,7 +128,7 @@ def main():
 
     status = {}
     if c["scan"][0] and not args.no_scan:
-        start_scanner(alerts, status, args.interval)
+        start_scanner(alerts, status, args.interval, c["cloud"][0])
         alerts.say("Czuj pilnuje. Skaner włączony.")
     else:
         status = None  # status_line powie modelowi, że skanera nie ma

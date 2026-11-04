@@ -27,7 +27,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          swiftc Czuj/TrackerCore.swift Tests/main.swift -o /tmp/czuj-test 2>&1 | tee test.log
+          swiftc Czuj/TrackerCore.swift Czuj/Cloud.swift Czuj/Keychain.swift Tests/main.swift -o /tmp/czuj-test 2>&1 | tee test.log
           /tmp/czuj-test 2>&1 | tee -a test.log
       - name: Build aplikacji (symulator, bez podpisu)
         id: b

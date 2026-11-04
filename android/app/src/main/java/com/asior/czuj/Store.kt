@@ -40,6 +40,35 @@ object Store {
         cachedKey = k
     }
 
+    // ---------- wspólna baza ----------
+
+    /** Zgoda na wysyłanie anonimowych alarmów. Domyślnie WYŁĄCZONA. */
+    fun share(ctx: Context): Boolean = prefs(ctx).getBoolean("share", false)
+    fun setShare(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean("share", on).apply() }
+
+    fun cloudRefresh(ctx: Context): String =
+        prefs(ctx).getString("cloud_refresh_enc", null)?.let { Secret.decrypt(it) } ?: ""
+
+    fun setCloudRefresh(ctx: Context, token: String) {
+        prefs(ctx).edit().putString("cloud_refresh_enc", Secret.encrypt(token)).apply()
+    }
+
+    @Synchronized fun wasSent(ctx: Context, key: String): Boolean = sentList(ctx).contains(key)
+
+    @Synchronized fun markSent(ctx: Context, key: String) {
+        val l = sentList(ctx).toMutableList()
+        l.add(key)
+        while (l.size > 30) l.removeAt(0)
+        prefs(ctx).edit().putString("sent", JSONArray(l).toString()).apply()
+    }
+
+    private fun sentList(ctx: Context): List<String> = try {
+        val a = JSONArray(prefs(ctx).getString("sent", "[]"))
+        (0 until a.length()).map { a.getString(it) }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
     @Synchronized fun addAlert(ctx: Context, text: String) {
         val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT).format(Date())
         val list = alerts(ctx).toMutableList()

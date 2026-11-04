@@ -42,4 +42,12 @@ w = TrackerCore.Watch()
 for i in 0..<10 { _ = w.sighting(addr: "FF", tag: "Tile", top: home, now: TimeInterval(i)) }
 check(w.seen["FF"]?.n == 1, "jedna obserwacja na minutę")
 
+// kratki identyczne jak w Kotlinie i Pythonie (te same przypadki)
+check(Cloud.cell(53.7012, 17.5601) == "53.70:17.56", "kratka 1")
+check(Cloud.cell(53.709, 17.569) == "53.70:17.56", "kratka 2")
+check(Cloud.cell(-0.001, 0.001) == "0.00:0.00", "kratka bez -0.00")
+check(Cloud.cell(-33.8688, 151.2093) == "-33.86:151.20", "kratka półkula południowa")
+check(Cloud.typeOf("AirTag / Find My") == "airtag" && Cloud.typeOf("Tile") == "tile"
+      && Cloud.typeOf("SmartTag (Samsung)") == "smarttag" && Cloud.typeOf("x") == nil, "typy do bazy")
+
 exit(failures == 0 ? 0 : 1)

@@ -40,6 +40,8 @@ class MainActivity : Activity() {
     private lateinit var alertsView: TextView
     private lateinit var question: EditText
     private lateinit var keyField: EditText
+    private lateinit var shareBtn: Button
+    private lateinit var nearbyView: TextView
     private val ui = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() { refresh(); ui.postDelayed(this, 2000) }
@@ -76,6 +78,21 @@ class MainActivity : Activity() {
 
         alertsView = text("", 14f, fg)
         root.addView(section(label("Ostatnie alarmy"), alertsView))
+
+        shareBtn = button("") {
+            Store.setShare(this, !Store.share(this))
+            refresh()
+        }
+        nearbyView = text("", 15f, fg)
+        root.addView(section(
+            label("Wspólna mapa (anonimowo)"),
+            text("Wysyłam tylko: typ trackera, dzień i kratkę ok. 2 km. Bez adresów urządzeń, " +
+                "dokładnego miejsca i godziny. Mapa pokazuje kratki zgłoszone przez co najmniej 3 różne " +
+                "urządzenia, z opóźnieniem 2 dni, więc nie da się nią namierzyć jednej osoby.", 13f, dim),
+            shareBtn,
+            button("Sprawdź okolicę (7 dni)") { checkNearby() },
+            nearbyView
+        ))
 
         capsView = text("", 14f, fg)
         keyField = EditText(this).apply {
@@ -128,6 +145,10 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(code, perms, results)
         if (code == 1) startGuard()
+        if (code == 3) {
+            if (results.isNotEmpty() && results[0] == PackageManager.PERMISSION_GRANTED) checkNearby()
+            else nearbyView.text = "Bez przybliżonej lokalizacji nie pokażę mapy okolicy."
+        }
     }
 
     // ---------- rozmowa ----------
@@ -179,6 +200,34 @@ class MainActivity : Activity() {
         }.start()
     }
 
+    // ---------- wspólna mapa ----------
+
+    private fun checkNearby() {
+        if (!Cloud.configured) { nearbyView.text = "Wspólna baza nie jest jeszcze skonfigurowana."; return }
+        if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION), 3)
+            return
+        }
+        nearbyView.text = "Sprawdzam…"
+        Where.locate(this) { loc ->
+            if (loc == null) { nearbyView.text = "Nie znam przybliżonej pozycji. Włącz lokalizację."; return@locate }
+            Thread {
+                val txt = try {
+                    val n = Cloud.nearby(loc.latitude, loc.longitude)
+                    when {
+                        n == null -> "Mapa jeszcze pusta (liczy się raz na dobę)."
+                        n.total == 0 -> "W promieniu ok. 3 km brak alarmów (${n.from} – ${n.to})."
+                        else -> "W promieniu ok. 3 km: ${n.total} alarmów (${n.from} – ${n.to}). " +
+                            "AirTag ${n.airtag}, Tile ${n.tile}, SmartTag ${n.smarttag}. Sprawdzaj torbę i pojazd."
+                    }
+                } catch (e: Exception) {
+                    "Nie udało się pobrać mapy: ${e.message}"
+                }
+                runOnUiThread { nearbyView.text = txt }
+            }.start()
+        }
+    }
+
     // ---------- stan ----------
 
     private fun refresh() {
@@ -189,6 +238,8 @@ class MainActivity : Activity() {
         val alerts = Store.alerts(this)
         alertsView.text = if (alerts.isEmpty()) "Brak alarmów." else alerts.takeLast(5).reversed().joinToString("\n\n")
         capsView.text = caps(s).joinToString("\n")
+        shareBtn.text = if (Store.share(this)) "Udostępniam alarmy: WŁĄCZONE (stuknij, by wyłączyć)"
+            else "Udostępniam alarmy: WYŁĄCZONE (stuknij, by włączyć)"
     }
 
     private fun caps(s: GuardService.Status): List<String> {
@@ -205,7 +256,9 @@ class MainActivity : Activity() {
         put(SpeechRecognizer.isRecognitionAvailable(this), "Rozpoznawanie mowy", "pisz pytania")
         put(Voice.ready, "Głos po polsku", if (Voice.failed) "doinstaluj polski głos w ustawieniach syntezy mowy" else "uruchamia się")
         put(Store.key(this).isNotEmpty(), "Asystent AI", "bez klucza odpowiadam tylko o stanie skanera")
+        put(Cloud.configured, "Wspólna mapa", "baza jeszcze nie skonfigurowana")
         if (s.error.isNotEmpty()) out.add("⚠️ " + s.error)
+        if (GuardService.cloudError.isNotEmpty()) out.add("⚠️ wysyłka do mapy: " + GuardService.cloudError)
         return out
     }
 

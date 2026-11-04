@@ -48,6 +48,11 @@ SCAN_INTERVAL = 60  # sekundy między skanami
 WAKE_WORD = "czuj"
 VOSK_MODEL_PATH = "~/.czuj/vosk-model-small-pl-0.22"
 
+# Wspólna mapa (Firebase). Wartości publiczne z założenia, dostęp chronią reguły.
+# Puste = funkcja wyłączona. Zgoda na wysyłanie: CZUJ_SHARE=1 w ~/.czuj/env.
+CLOUD_PROJECT = ""
+CLOUD_API_KEY = ""
+
 # Osobowość asystenta
 SYSTEM_PROMPT = (
     "Jesteś Czuj, osobisty strażnik w kieszeni. Pilnujesz, czy za użytkownikiem "
