@@ -1,0 +1,44 @@
+name: iOS
+on:
+  push:
+    branches: [main, 'ci/**']
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    # macOS w prywatnym repo liczy minuty x10: build tylko gdy zmienia się ios/
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: Testy reguł (swiftc, bez Xcode)
+        id: t
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          swiftc Czuj/TrackerCore.swift Tests/main.swift -o /tmp/czuj-test 2>&1 | tee test.log
+          /tmp/czuj-test 2>&1 | tee -a test.log
+      - name: Build aplikacji (symulator, bez podpisu)
+        id: b
+        continue-on-error: true
+        run: |
+          brew install xcodegen > /dev/null
+          xcodegen generate
+          set -o pipefail
+          xcodebuild -project Czuj.xcodeproj -target Czuj -sdk iphonesimulator -configuration Debug \
+            build CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log | tail -5
+      - name: Wynik do gałęzi ci-result-ios
+        if: always()
+        run: |
+          mkdir -p /tmp/r && cd /tmp/r && git init -q && git checkout -q -b ci-result-ios
+          echo "test=${{ steps.t.outcome }} build=${{ steps.b.outcome }} ${GITHUB_SHA}" > outcome.txt
+          cp "$GITHUB_WORKSPACE/ios/test.log" . 2>/dev/null || true
+          (grep -E "error:|warning: .*Czuj/|BUILD SUCCEEDED|BUILD FAILED" "$GITHUB_WORKSPACE/ios/build.log" | head -200) > errors.txt || true
+          tail -60 "$GITHUB_WORKSPACE/ios/build.log" > tail.txt 2>/dev/null || true
+          git add . && git -c user.name=ci -c user.email=ci@example.com commit -qm "ci result ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" ci-result-ios

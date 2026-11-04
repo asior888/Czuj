@@ -1,0 +1,27 @@
+name: Czuj
+options:
+  bundleIdPrefix: com.asior
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  Czuj:
+    type: application
+    platform: iOS
+    sources: [Czuj]
+    info:
+      path: Czuj/Info.plist
+      properties:
+        CFBundleDisplayName: Czuj
+        CFBundleShortVersionString: "1.0"
+        UILaunchScreen: {}
+        UIBackgroundModes: [bluetooth-central]
+        NSBluetoothAlwaysUsageDescription: "Czuj szuka trackerów Bluetooth, które jadą razem z tobą."
+        NSLocationWhenInUseUsageDescription: "Lokalizacja pozwala odróżnić, czy tracker jedzie z tobą, czy stoi w jednym miejscu."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "Lokalizacja w tle pozwala wykryć tracker także przy zgaszonym ekranie."
+        NSSpeechRecognitionUsageDescription: "Rozpoznawanie mowy pozwala pytać Czuja głosem."
+        NSMicrophoneUsageDescription: "Mikrofon jest potrzebny do pytań głosowych."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.asior.czuj
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"

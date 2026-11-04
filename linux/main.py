@@ -27,6 +27,17 @@ def status_line(status, alerts):
     return ", ".join(parts)
 
 
+def local_answer(status, alerts):
+    """Odpowiedź bez modelu AI: tylko na podstawie skanera."""
+    if status is None:
+        return "Skaner jest wyłączony na tym urządzeniu."
+    recent = alerts.recent(1)
+    if recent:
+        return "Ostatni alarm: " + recent[0]
+    return ("Nie widzę trackera, który by z tobą jechał. "
+            f"Trackerów w zasięgu: {status.get('trackers', 0)}.")
+
+
 def start_scanner(alerts, status, interval):
     import scanner
 
@@ -71,10 +82,14 @@ def conversation(c, alerts, status):
             text = text.strip()
             if not text:
                 continue
-            if not use_llm:
-                print("Usłyszałem:", text)
-                continue
-            answer = brain.ask(text, status_line(status, alerts))
+            if use_llm:
+                try:
+                    answer = brain.ask(text, status_line(status, alerts))
+                except Exception as e:
+                    print("[asystent offline]", e)
+                    answer = local_answer(status, alerts)
+            else:
+                answer = local_answer(status, alerts)
             print("Czuj:", answer)
             alerts.say(answer)
         except (KeyboardInterrupt, EOFError):

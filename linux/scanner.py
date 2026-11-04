@@ -27,7 +27,8 @@ def classify(adv):
     apple = adv.manufacturer_data.get(0x004C)
     if apple and len(apple) >= 2 and apple[0] == 0x12 and apple[1] == 0x19:
         return "AirTag / Find My"
-    for uuid in adv.service_uuids:
+    uuids = list(adv.service_uuids) + list(getattr(adv, "service_data", {}).keys())
+    for uuid in uuids:
         u = uuid.lower()
         if u.startswith("0000feed") or u.startswith("0000feec"):
             return "Tile"
