@@ -14,17 +14,12 @@ android {
         versionCode runNumber
         versionName "1.0.${runNumber}"
     }
-    signingConfigs {
-        // klucz TYLKO do testów (debug); do Google Play osobny klucz wydania
-        czujDebug {
-            storeFile file('czuj-debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
-        }
-    }
+    // Podpis wydania NIE jest w gradle ani w repo: workflow podpisuje APK (apksigner)
+    // kluczem odszyfrowanym z android/app/czuj-release.keystore.enc hasłem z sekretu CZUJ_SIGN_PASS.
     buildTypes {
-        debug { signingConfig signingConfigs.czujDebug }
+        release {
+            minifyEnabled false
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

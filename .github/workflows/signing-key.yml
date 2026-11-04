@@ -1,0 +1,26 @@
+name: Klucz podpisu (jednorazowo)
+# Uruchom RAZ ręcznie (Actions -> Klucz podpisu -> Run workflow) po dodaniu sekretu CZUJ_SIGN_PASS.
+# Tworzy klucz wydania i zapisuje go w repo TYLKO zaszyfrowany (AES-256, PBKDF2 600 tys.).
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generuj i zaszyfruj
+        env:
+          PASS: ${{ secrets.CZUJ_SIGN_PASS }}
+        run: |
+          if [ ${#PASS} -lt 20 ]; then echo "::error::Sekret CZUJ_SIGN_PASS musi mieć co najmniej 20 znaków"; exit 1; fi
+          OUT=android/app/czuj-release.keystore.enc
+          if [ -f "$OUT" ]; then echo "::error::Klucz już istnieje. Nie nadpisuję (stare instalacje straciłyby aktualizacje)."; exit 1; fi
+          K="$RUNNER_TEMP/k.p12"
+          keytool -genkeypair -keystore "$K" -storetype PKCS12 -storepass:env PASS -alias czuj \
+            -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Czuj" > /dev/null 2>&1
+          openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -in "$K" -out "$OUT" -pass env:PASS
+          shred -u "$K"
+          git config user.name ci && git config user.email ci@example.com
+          git add "$OUT" && git commit -qm "Zaszyfrowany klucz podpisu wydania" && git push

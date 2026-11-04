@@ -11,3 +11,6 @@ android/build.log
 # iOS
 ios/Czuj.xcodeproj/
 ios/build/
+firebase/node_modules/
+firebase/*.log
+firebase-debug.log

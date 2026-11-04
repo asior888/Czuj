@@ -32,13 +32,13 @@ jobs:
         run: |
           chmod +x gradlew
           set -o pipefail
-          ./gradlew testDebugUnitTest assembleDebug --no-daemon --console=plain 2>&1 | tee build.log
+          ./gradlew testDebugUnitTest assembleRelease --no-daemon --console=plain 2>&1 | tee build.log
       - name: Wyniki do przekazania
         if: always()
         run: |
           mkdir -p ../out
           cp build.log ../out/ 2>/dev/null || true
-          cp app/build/outputs/apk/debug/app-debug.apk ../out/czuj.apk 2>/dev/null || true
+          cp app/build/outputs/apk/release/app-release-unsigned.apk ../out/czuj-unsigned.apk 2>/dev/null || true
           cp -r app/build/test-results ../out/tests 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -59,8 +59,31 @@ jobs:
         with:
           name: android-out
           path: out
-      - name: Wydanie APK (tylko main, tylko po udanym buildzie)
-        if: needs.build.outputs.outcome == 'success' && github.ref == 'refs/heads/main'
+      - uses: actions/checkout@v4
+        with:
+          path: src
+          persist-credentials: false
+          sparse-checkout: android/app
+      - name: Podpis (apksigner, bez kodu z builda)
+        id: s
+        if: needs.build.outputs.outcome == 'success'
+        env:
+          PASS: ${{ secrets.CZUJ_SIGN_PASS }}
+        run: |
+          ENC=src/android/app/czuj-release.keystore.enc
+          if [ -z "$PASS" ] || [ ! -f "$ENC" ]; then
+            echo "::warning::Brak sekretu CZUJ_SIGN_PASS albo klucza (workflow 'Klucz podpisu'): APK niepodpisany, bez wydania"
+            echo "ok=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          K="$RUNNER_TEMP/k.p12"
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -in "$ENC" -out "$K" -pass env:PASS
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" sign --ks "$K" --ks-pass env:PASS --ks-key-alias czuj --out out/czuj.apk out/czuj-unsigned.apk
+          shred -u "$K"
+          "$BT/apksigner" verify --print-certs out/czuj.apk | grep -E "SHA-256" | head -1 | tee out/cert.txt
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+      - name: Wydanie APK (tylko main, tylko po udanym buildzie i podpisie)
+        if: needs.build.outputs.outcome == 'success' && steps.s.outputs.ok == 'true' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -71,10 +94,12 @@ jobs:
             --title "Czuj na Androida (najnowszy)" \
             --notes "Build ${GITHUB_SHA::7}, wersja 1.0.${GITHUB_RUN_NUMBER}.
           sha256: ${SUM}
+          $(cat out/cert.txt)
           Pobierz czuj.apk na telefon i otwórz, Android zapyta o zgodę na instalację."
       - name: Wynik do gałęzi ci-result
         env:
           OUTCOME: ${{ needs.build.outputs.outcome }}
+          SIGNED: ${{ steps.s.outputs.ok }}
           REPO: ${{ github.repository }}
           TOKEN: ${{ github.token }}
         run: |
@@ -85,6 +110,7 @@ jobs:
           tail -80 "$L" > tail.txt 2>/dev/null || true
           ls -la "$GITHUB_WORKSPACE/out/" > apk.txt 2>&1 || true
           sha256sum "$GITHUB_WORKSPACE/out/czuj.apk" >> apk.txt 2>/dev/null || true
+          echo "podpis: ${SIGNED:-brak}" >> apk.txt
           cp -r "$GITHUB_WORKSPACE/out/tests" tests 2>/dev/null || true
           git add . && git -c user.name=ci -c user.email=ci@example.com commit -qm "ci result ${GITHUB_SHA}"
           git push -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" ci-result
