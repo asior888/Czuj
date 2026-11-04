@@ -1,0 +1,51 @@
+name: Android
+on:
+  push:
+    branches: [main, 'ci/**']
+    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK 35
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+      - name: Testy + build
+        id: b
+        continue-on-error: true
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew testDebugUnitTest assembleDebug --no-daemon --console=plain 2>&1 | tee build.log
+      - name: Wydanie APK (tylko main)
+        if: steps.b.outcome == 'success' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk czuj.apk
+          gh release delete android-latest -y --cleanup-tag || true
+          gh release create android-latest czuj.apk --target "$GITHUB_SHA" \
+            --title "Czuj na Androida (najnowszy)" \
+            --notes "Build ${GITHUB_SHA::7}, wersja 1.0.${GITHUB_RUN_NUMBER}. Pobierz czuj.apk na telefon i otwórz, Android zapyta o zgodę na instalację."
+      - name: Wynik do gałęzi ci-result
+        if: always()
+        run: |
+          mkdir -p /tmp/r && cd /tmp/r && git init -q && git checkout -q -b ci-result
+          echo "${{ steps.b.outcome }} ${GITHUB_SHA}" > outcome.txt
+          (grep -E "^e: |error:|What went wrong|FAILED|BUILD SUCCESSFUL|BUILD FAILED|tests completed" -A3 "$GITHUB_WORKSPACE/android/build.log" | head -300) > errors.txt || true
+          tail -80 "$GITHUB_WORKSPACE/android/build.log" > tail.txt || true
+          ls -la "$GITHUB_WORKSPACE/android/app/build/outputs/apk/debug/" > apk.txt 2>&1 || true
+          cp -r "$GITHUB_WORKSPACE/android/app/build/test-results" tests 2>/dev/null || true
+          git add . && git -c user.name=ci -c user.email=ci@example.com commit -qm "ci result ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" ci-result

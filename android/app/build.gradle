@@ -1,0 +1,41 @@
+apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
+
+// numer wersji rośnie z każdym buildem w GitHub Actions (aktualizacja bez odinstalowania)
+def runNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+
+android {
+    namespace "com.asior.czuj"
+    compileSdkVersion 35
+    defaultConfig {
+        applicationId "com.asior.czuj"
+        minSdkVersion 26
+        targetSdkVersion 35
+        versionCode runNumber
+        versionName "1.0.${runNumber}"
+    }
+    signingConfigs {
+        // klucz TYLKO do testów (debug); do Google Play osobny klucz wydania
+        czujDebug {
+            storeFile file('czuj-debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+    buildTypes {
+        debug { signingConfig signingConfigs.czujDebug }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    testImplementation 'junit:junit:4.13.2'
+}
