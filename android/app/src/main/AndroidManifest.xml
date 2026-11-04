@@ -30,6 +30,7 @@
 
     <application
         android:allowBackup="false"
+        android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher"
         android:label="Czuj"
         android:theme="@android:style/Theme.Material.NoActionBar">

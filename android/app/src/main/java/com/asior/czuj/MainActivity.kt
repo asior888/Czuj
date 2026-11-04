@@ -49,6 +49,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         Voice.init(this)
         window.statusBarColor = bg
+        // ekran z kluczem i alarmami nie trafia do zrzutów ani podglądu ostatnich aplikacji
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(20), dp(16), dp(24))
@@ -77,8 +79,10 @@ class MainActivity : Activity() {
 
         capsView = text("", 14f, fg)
         keyField = EditText(this).apply {
-            hint = "Klucz Anthropic (opcjonalny)"
+            hint = "Klucz Anthropic (pusty + Zapisz = usuń)"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            // klawiatura nie uczy się klucza (brak podpowiedzi i zapisu w słowniku)
+            imeOptions = android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
             setTextColor(fg); setHintTextColor(dim)
         }
         root.addView(section(

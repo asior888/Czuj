@@ -14,10 +14,30 @@ object Store {
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences("czuj", Context.MODE_PRIVATE)
 
-    fun key(ctx: Context): String = prefs(ctx).getString("anthropic_key", "") ?: ""
+    // Klucz API trzymany TYLKO zaszyfrowany (Secret = Android Keystore).
+    @Volatile private var cachedKey: String? = null
 
-    fun setKey(ctx: Context, key: String) {
-        prefs(ctx).edit().putString("anthropic_key", key.trim()).apply()
+    @Synchronized fun key(ctx: Context): String {
+        cachedKey?.let { return it }
+        val p = prefs(ctx)
+        // stary zapis otwartym tekstem (wersje sprzed szyfrowania) -> szyfrujemy i usuwamy
+        p.getString("anthropic_key", null)?.let { old ->
+            p.edit().remove("anthropic_key").apply()
+            if (old.isNotBlank()) setKey(ctx, old)
+        }
+        val enc = p.getString("anthropic_key_enc", null) ?: return "".also { cachedKey = it }
+        val plain = Secret.decrypt(enc)
+        if (plain == null) p.edit().remove("anthropic_key_enc").apply() // nieodszyfrowalny = wpisz ponownie
+        return (plain ?: "").also { cachedKey = it }
+    }
+
+    /** Pusty tekst = usuń klucz. */
+    @Synchronized fun setKey(ctx: Context, key: String) {
+        val k = key.trim()
+        val e = prefs(ctx).edit()
+        if (k.isEmpty()) e.remove("anthropic_key_enc") else e.putString("anthropic_key_enc", Secret.encrypt(k))
+        e.apply()
+        cachedKey = k
     }
 
     @Synchronized fun addAlert(ctx: Context, text: String) {

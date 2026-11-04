@@ -12,9 +12,17 @@ final class Brain {
         "Jeśli ktoś czuje się zagrożony, poradź zadzwonić pod 112."
     private var history: [[String: String]] = []
 
+    /// Klucz tylko w pęku kluczy (Keychain). Pusty = usunięty.
     var key: String {
-        get { UserDefaults.standard.string(forKey: "anthropic_key") ?? "" }
-        set { UserDefaults.standard.set(newValue.trimmingCharacters(in: .whitespaces), forKey: "anthropic_key") }
+        get {
+            // stary zapis w UserDefaults (otwarty tekst) -> przenosimy do pęku kluczy i kasujemy
+            if let old = UserDefaults.standard.string(forKey: "anthropic_key") {
+                UserDefaults.standard.removeObject(forKey: "anthropic_key")
+                if !old.isEmpty { Keychain.set("anthropic_key", old) }
+            }
+            return Keychain.get("anthropic_key")
+        }
+        set { Keychain.set("anthropic_key", newValue.trimmingCharacters(in: .whitespacesAndNewlines)) }
     }
 
     struct ApiError: LocalizedError {

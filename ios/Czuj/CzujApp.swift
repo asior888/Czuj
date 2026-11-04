@@ -62,7 +62,10 @@ struct ContentView: View {
                 section {
                     label("Co działa na tym iPhonie")
                     capsView
-                    SecureField("Klucz Anthropic (opcjonalny)", text: $keyField).textFieldStyle(.roundedBorder)
+                    SecureField("Klucz Anthropic (pusty + Zapisz = usuń)", text: $keyField)
+                        .textFieldStyle(.roundedBorder)
+                        .textContentType(.password)
+                        .autocorrectionDisabled()
                     action("Zapisz klucz") { Brain.shared.key = keyField; keyField = "" }
                 }
             }

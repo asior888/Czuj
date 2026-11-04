@@ -23,8 +23,10 @@ class Alerts:
         del self.history[:-KEEP]
         print("[ALARM]", text)
         try:
-            os.makedirs(os.path.dirname(self._logfile) or ".", exist_ok=True)
-            with open(self._logfile, "a", encoding="utf-8") as f:
+            # dziennik zdradza, kiedy i gdzie ktoś był: tylko dla właściciela
+            os.makedirs(os.path.dirname(self._logfile) or ".", mode=0o700, exist_ok=True)
+            fd = os.open(self._logfile, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            with os.fdopen(fd, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
         except OSError:
             pass

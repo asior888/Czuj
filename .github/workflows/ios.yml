@@ -4,18 +4,24 @@ on:
     branches: [main, 'ci/**']
     paths: ['ios/**', '.github/workflows/ios.yml']
   workflow_dispatch:
+# domyślnie tylko odczyt; zapis ma wyłącznie zadanie "report"
 permissions:
-  contents: write
+  contents: read
 jobs:
   build:
     # macOS w prywatnym repo liczy minuty x10: build tylko gdy zmienia się ios/
     runs-on: macos-latest
     timeout-minutes: 30
+    outputs:
+      test: ${{ steps.t.outcome }}
+      build: ${{ steps.b.outcome }}
     defaults:
       run:
         working-directory: ios
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Testy reguł (swiftc, bez Xcode)
         id: t
         continue-on-error: true
@@ -32,13 +38,41 @@ jobs:
           set -o pipefail
           xcodebuild -project Czuj.xcodeproj -target Czuj -sdk iphonesimulator -configuration Debug \
             build CODE_SIGNING_ALLOWED=NO 2>&1 | tee build.log | tail -5
-      - name: Wynik do gałęzi ci-result-ios
+      - name: Wyniki do przekazania
         if: always()
         run: |
+          mkdir -p ../out
+          cp test.log build.log ../out/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-out
+          path: out
+          retention-days: 7
+
+  report:
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-out
+          path: out
+      - name: Wynik do gałęzi ci-result-ios
+        env:
+          T: ${{ needs.build.outputs.test }}
+          B: ${{ needs.build.outputs.build }}
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ github.token }}
+        run: |
           mkdir -p /tmp/r && cd /tmp/r && git init -q && git checkout -q -b ci-result-ios
-          echo "test=${{ steps.t.outcome }} build=${{ steps.b.outcome }} ${GITHUB_SHA}" > outcome.txt
-          cp "$GITHUB_WORKSPACE/ios/test.log" . 2>/dev/null || true
-          (grep -E "error:|warning: .*Czuj/|BUILD SUCCEEDED|BUILD FAILED" "$GITHUB_WORKSPACE/ios/build.log" | head -200) > errors.txt || true
-          tail -60 "$GITHUB_WORKSPACE/ios/build.log" > tail.txt 2>/dev/null || true
+          echo "test=${T} build=${B} ${GITHUB_SHA}" > outcome.txt
+          cp "$GITHUB_WORKSPACE/out/test.log" . 2>/dev/null || true
+          (grep -E "error:|warning: .*Czuj/|BUILD SUCCEEDED|BUILD FAILED" "$GITHUB_WORKSPACE/out/build.log" | head -200) > errors.txt || true
+          tail -60 "$GITHUB_WORKSPACE/out/build.log" > tail.txt 2>/dev/null || true
           git add . && git -c user.name=ci -c user.email=ci@example.com commit -qm "ci result ${GITHUB_SHA}"
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" ci-result-ios
+          git push -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" ci-result-ios

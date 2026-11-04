@@ -8,6 +8,7 @@ cd "$(dirname "$0")"
 DIR="$(pwd)"
 CZUJ="$HOME/.czuj"
 mkdir -p "$CZUJ"
+chmod 700 "$CZUJ"   # klucze i dziennik alarmów tylko dla ciebie
 
 echo "== Pakiety systemowe"
 sudo apt-get update -q
@@ -39,8 +40,10 @@ for arg in "$@"; do
       echo "== Słowo wybudzające (Vosk, polski model)"
       .venv/bin/pip install -q vosk
       if [ ! -d "$CZUJ/vosk-model-small-pl-0.22" ]; then
-        curl -L -o /tmp/vosk-pl.zip https://alphacephei.com/vosk/models/vosk-model-small-pl-0.22.zip
-        unzip -q /tmp/vosk-pl.zip -d "$CZUJ" && rm /tmp/vosk-pl.zip
+        TMP=$(mktemp -d)   # własny katalog tymczasowy, nie przewidywalny plik w /tmp
+        curl -fL --proto "=https" -o "$TMP/vosk-pl.zip" https://alphacephei.com/vosk/models/vosk-model-small-pl-0.22.zip
+        unzip -q "$TMP/vosk-pl.zip" -d "$CZUJ"
+        rm -rf "$TMP"
       fi
       ;;
     --service)

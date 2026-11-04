@@ -7,6 +7,11 @@ CZUJ_DIR = os.path.expanduser("~/.czuj")
 
 def _load_env_file(path=os.path.join(CZUJ_DIR, "env")):
     try:
+        if os.stat(path).st_mode & 0o077:
+            print(f"[UWAGA] {path} mogą czytać inni użytkownicy. Popraw: chmod 600 {path}")
+    except OSError:
+        return
+    try:
         with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()

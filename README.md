@@ -54,6 +54,20 @@ Skaner wymaga NetworkManagera (`nmcli`) do odcisku miejsca. Alarmy: `~/.czuj/ale
   z Xcode na Macu (aplikacja ważna 7 dni). Build w chmurze sprawdza tylko, czy kod się kompiluje.
 - Builder macOS w prywatnym repo zużywa minuty x10, więc iOS buduje się tylko przy zmianach w `ios/`.
 
+## Bezpieczeństwo
+- **Klucz AI:** Android szyfruje go kluczem AES-256 z Android Keystore (klucz nie opuszcza telefonu),
+  iOS trzyma go w pęku kluczy tylko na tym urządzeniu, Linux w `~/.czuj/env` z prawami 600.
+  Pusty klucz + Zapisz = usunięcie. Klucze nigdy nie trafiają do repo.
+- **Android:** bez kopii zapasowej danych aplikacji, tylko HTTPS, ekran zablokowany dla zrzutów
+  i podglądu ostatnich aplikacji (FLAG_SECURE), usługa w tle niedostępna dla innych aplikacji.
+- **Linux:** katalog `~/.czuj` 700, dziennik alarmów 600 (zdradza, kiedy gdzie byłeś),
+  ostrzeżenie, gdy plik z kluczami czytają inni.
+- **Budowanie:** kompilacja ma tylko prawo odczytu repo. Zapis (wydanie APK) robi osobne zadanie,
+  które nie uruchamia cudzego kodu. W opisie wydania jest suma `sha256` pliku APK.
+- **Do zrobienia przed udostępnieniem obcym:** klucz podpisu `czuj-debug.keystore` jest w repo
+  (hasło `android`). Każdy z dostępem do repo może podpisać "aktualizację". Przy prywatnym repo
+  i 2 osobach to akceptowalne; przed Google Play: nowy klucz wydania poza repo (GitHub Secret).
+
 ## Prywatność i prawo
 - Wszystko liczone na urządzeniu. Do internetu idzie tylko pytanie do asystenta (gdy jest klucz).
 - Czuj tylko odbiera sygnały, niczego nie nadaje ani nie zagłusza.
