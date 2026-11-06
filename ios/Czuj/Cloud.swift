@@ -1,21 +1,19 @@
 import Foundation
 
-// Wspólna baza (Firebase REST). Wysyłamy TYLKO typ trackera, dzień (UTC) i kratkę ok. 2 km.
-// Czytamy TYLKO mapę zbiorczą. Reguły: firebase/firestore.rules.
+// Wspólna mapa: serwer Cloudflare (server/worker.js), bez kont i logowania.
+// Wysyłamy TYLKO: losowy numer instalacji (do liczenia różnych urządzeń), typ trackera, dzień (UTC), kratkę ok. 2 km.
+// Czytamy TYLKO mapę zbiorczą (kratki z >= 3 urządzeń, opóźnienie 2 dni).
 final class Cloud {
     static let shared = Cloud()
-    // Wartości z konsoli Firebase (publiczne z założenia; dostęp chronią reguły). Puste = funkcja wyłączona.
-    static let project = ""
-    static let apiKey = ""
+    /// Adres serwera (ten sam co "api" w wersja.json). Pusty = funkcja wyłączona.
+    static let api = ""
     static let grid = 0.02
 
-    static var configured: Bool { !project.isEmpty && !apiKey.isEmpty }
-    private var docs: String { "https://firestore.googleapis.com/v1/projects/\(Cloud.project)/databases/(default)/documents" }
+    static var configured: Bool { !api.isEmpty }
 
     struct HttpError: LocalizedError {
         let code: Int
-        let body: String
-        var errorDescription: String? { "HTTP \(code): \(body.prefix(160))" }
+        var errorDescription: String? { "serwer \(code)" }
     }
 
     struct Nearby { let total, airtag, tile, smarttag: Int; let from, to: String }
@@ -23,6 +21,16 @@ final class Cloud {
     var share: Bool {
         get { UserDefaults.standard.bool(forKey: "share") }   // domyślnie false
         set { UserDefaults.standard.set(newValue, forKey: "share") }
+    }
+
+    /// Losowy numer instalacji (16 bajtów hex), tylko do liczenia różnych telefonów w kratce.
+    var installId: String {
+        if let id = UserDefaults.standard.string(forKey: "install_id"), id.count == 32 { return id }
+        var b = [UInt8](repeating: 0, count: 16)
+        for i in 0..<16 { b[i] = UInt8.random(in: 0...255) }
+        let id = b.map { String(format: "%02x", $0) }.joined()
+        UserDefaults.standard.set(id, forKey: "install_id")
+        return id
     }
 
     static func typeOf(_ tag: String) -> String? {
@@ -47,40 +55,6 @@ final class Cloud {
         return f.string(from: Date())
     }
 
-    // ---------- logowanie anonimowe ----------
-
-    private var idToken = ""
-    private var uid = ""
-    private var until = Date.distantPast
-
-    private func auth() async throws -> (String, String) {
-        if !idToken.isEmpty && Date() < until { return (idToken, uid) }
-        var j: [String: Any]?
-        let refresh = Keychain.get("cloud_refresh")
-        if !refresh.isEmpty {
-            do {
-                let r = try await http("https://securetoken.googleapis.com/v1/token?key=\(Cloud.apiKey)", "POST",
-                                       body: "grant_type=refresh_token&refresh_token=" + (refresh.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""),
-                                       type: "application/x-www-form-urlencoded")
-                j = ["idToken": r["id_token"] ?? "", "refreshToken": r["refresh_token"] ?? "",
-                     "localId": r["user_id"] ?? "", "expiresIn": r["expires_in"] ?? "3600"]
-            } catch let e as HttpError where e.code == 400 {
-                j = nil   // token unieważniony -> nowe konto; błąd sieci NIE tworzy nowego konta
-            }
-        }
-        let k: [String: Any]
-        if let j { k = j } else {
-            k = try await http("https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=\(Cloud.apiKey)", "POST",
-                               body: "{\"returnSecureToken\":true}", type: "application/json")
-        }
-        idToken = k["idToken"] as? String ?? ""
-        uid = k["localId"] as? String ?? ""
-        let secs = Double(k["expiresIn"] as? String ?? "3600") ?? 3600
-        until = Date().addingTimeInterval(secs - 300)
-        Keychain.set("cloud_refresh", k["refreshToken"] as? String ?? "")
-        return (idToken, uid)
-    }
-
     /// Wysyła alarm. Najwyżej raz na typ i dzień z tego urządzenia.
     @MainActor
     func report(tag: String, lat: Double, lon: Double) async throws {
@@ -89,16 +63,9 @@ final class Cloud {
         let key = "\(day)_\(type)"
         var sent = UserDefaults.standard.stringArray(forKey: "sent") ?? []
         if sent.contains(key) { return }
-        let (token, u) = try await auth()
-        func s(_ v: String) -> [String: String] { ["stringValue": v] }
-        let fields: [String: Any] = ["uid": s(u), "day": s(day), "cell": s(Cloud.cell(lat, lon)),
-                                     "type": s(type), "platform": s("ios"), "v": ["integerValue": "1"]]
-        let body = String(decoding: try JSONSerialization.data(withJSONObject: ["fields": fields]), as: UTF8.self)
-        do {
-            _ = try await http("\(docs)/reports?documentId=\(u)_\(key)", "POST", body: body, type: "application/json", bearer: token)
-        } catch let e as HttpError where e.code == 409 {
-            // już wysłane
-        }
+        let body: [String: String] = ["dev": installId, "day": day, "type": type,
+                                      "cell": Cloud.cell(lat, lon), "platform": "ios"]
+        _ = try await http("\(Cloud.api)/v1/report", "POST", body: try JSONSerialization.data(withJSONObject: body))
         sent.append(key)
         UserDefaults.standard.set(Array(sent.suffix(30)), forKey: "sent")
     }
@@ -106,17 +73,7 @@ final class Cloud {
     /// Mapa zbiorcza w promieniu ok. 3 km (3 x 3 kratki). nil = brak danych.
     func nearby(lat: Double, lon: Double) async throws -> Nearby? {
         guard Cloud.configured else { return nil }
-        let doc: [String: Any]
-        do {
-            doc = try await http("\(docs)/stats/week?key=\(Cloud.apiKey)", "GET")
-        } catch let e as HttpError where e.code == 404 {
-            return nil
-        }
-        guard let fields = doc["fields"] as? [String: Any],
-              let jsonField = fields["json"] as? [String: Any],
-              let text = jsonField["stringValue"] as? String,
-              let stats = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
-        else { return nil }
+        let stats = try await http("\(Cloud.api)/v1/stats", "GET")
         let cells = stats["cells"] as? [String: [String: Int]] ?? [:]
         var t = 0, a = 0, ti = 0, sm = 0
         for dy in -1...1 {
@@ -129,19 +86,17 @@ final class Cloud {
                       from: stats["from"] as? String ?? "", to: stats["to"] as? String ?? "")
     }
 
-    private func http(_ url: String, _ method: String, body: String? = nil, type: String? = nil,
-                      bearer: String? = nil) async throws -> [String: Any] {
+    private func http(_ url: String, _ method: String, body: Data? = nil) async throws -> [String: Any] {
         var req = URLRequest(url: URL(string: url)!)
         req.httpMethod = method
-        req.timeoutInterval = 30
-        if let bearer { req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization") }
+        req.timeoutInterval = 20
         if let body {
-            req.httpBody = Data(body.utf8)
-            req.setValue(type ?? "application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = body
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         let (data, resp) = try await URLSession.shared.data(for: req)
         let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(code) else { throw HttpError(code: code, body: String(decoding: data, as: UTF8.self)) }
+        guard (200..<300).contains(code) else { throw HttpError(code: code) }
         if data.isEmpty { return [:] }
         return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }

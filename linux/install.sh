@@ -34,6 +34,8 @@ CZUJ_SHARE=0
 # Przybliżona pozycja urządzenia (Linux nie ma GPS), np. 53.70 i 17.56
 CZUJ_LAT=
 CZUJ_LON=
+# Adres serwera mapy (z wersja.json, pole "api"), np. https://czuj.NAZWA.workers.dev
+CZUJ_API=
 ENV
   chmod 600 "$CZUJ/env"
   echo "== Utworzono $CZUJ/env: wpisz tam klucze (nano $CZUJ/env)"

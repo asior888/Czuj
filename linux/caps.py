@@ -84,7 +84,7 @@ def _cloud():
     import cloud
 
     if not cloud.configured():
-        return False, "baza nie skonfigurowana (config.py)"
+        return False, "serwer nie ustawiony (CZUJ_API w ~/.czuj/env)"
     if not cloud.sharing():
         return False, "brak zgody (CZUJ_SHARE=1 w ~/.czuj/env)"
     if not cloud.my_position():

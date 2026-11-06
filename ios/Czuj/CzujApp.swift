@@ -91,7 +91,7 @@ struct ContentView: View {
             row(guardian.placeKnown, "Lokalizacja (odcisk miejsca)", "zezwól na lokalizację, bez niej alarmy nie zadziałają")
             row(listener.available, "Rozpoznawanie mowy", "pisz pytania")
             row(!Brain.shared.key.isEmpty, "Asystent AI", "bez klucza odpowiadam tylko o stanie skanera")
-            row(Cloud.configured, "Wspólna mapa", "baza jeszcze nie skonfigurowana")
+            row(Cloud.configured, "Wspólna mapa", "serwer jeszcze nie ustawiony")
             Text("ℹ️ W tle iOS pozwala szukać tylko Tile i SmartTag. AirTagi wykrywa sam iOS (ostrzeżenia systemowe).")
                 .font(.footnote).foregroundColor(.secondary)
         }.font(.subheadline)
@@ -102,7 +102,7 @@ struct ContentView: View {
     }
 
     private func checkNearby() {
-        guard Cloud.configured else { nearby = "Wspólna baza nie jest jeszcze skonfigurowana."; return }
+        guard Cloud.configured else { nearby = "Wspólna mapa jeszcze nie działa (serwer nie ustawiony)."; return }
         guard let c = guardian.lastCoord else { nearby = "Nie znam przybliżonej pozycji. Włącz strażnika i lokalizację."; return }
         nearby = "Sprawdzam…"
         Task { @MainActor in
