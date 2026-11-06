@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: file:; style-src 'self' 'unsafe-inline' file:; img-src data: blob: https:; connect-src https://tiles.openfreemap.org; worker-src blob:; child-src blob:; font-src data:">
+<link rel="stylesheet" href="maplibre-gl.css">
+<style>
+:root { --bg:#131621; --card:#1C2130; --line:#2A3144; --txt:#D7DAE3; --dim:#8C93A8; --acc:#7FB8D9; --ok:#7FC8A9; --warn:#E8B86A; --bad:#E3907F; }
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--txt); font:15px/1.4 system-ui, sans-serif; overflow:hidden; }
+#map { position:absolute; inset:0; }
+#seg { position:absolute; top:12px; left:50%; transform:translateX(-50%); display:flex; background:var(--card); border:1px solid var(--line); border-radius:24px; padding:4px; z-index:3; }
+#seg button { border:0; background:none; color:var(--dim); font:inherit; font-weight:600; padding:0 18px; height:40px; border-radius:20px; white-space:nowrap; }
+#seg button.on { background:var(--line); color:var(--txt); }
+#msg { position:absolute; top:68px; left:16px; right:16px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px 14px; color:var(--dim); font-size:14px; z-index:3; display:none; }
+#sheet { position:absolute; left:0; right:0; bottom:0; max-height:42%; overflow-y:auto; background:var(--card); border-top:1px solid var(--line); border-radius:18px 18px 0 0; padding:14px 16px 18px; z-index:3; }
+#sheet h3 { margin:0 0 8px; font-size:13px; letter-spacing:.06em; color:var(--dim); font-weight:700; }
+.row { display:flex; align-items:center; gap:12px; min-height:52px; padding:6px 0; border-bottom:1px solid var(--line); }
+.row:last-child { border-bottom:0; }
+.dot { width:12px; height:12px; border-radius:50%; flex:none; }
+.row b { display:block; font-weight:600; }
+.row small { color:var(--dim); font-size:13px; }
+.legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--dim); font-size:13px; margin-top:6px; }
+.legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:6px; }
+.me { width:16px; height:16px; border-radius:50%; background:var(--acc); border:3px solid #E8EEF6; box-shadow:0 0 0 6px rgba(127,184,217,.25); }
+.maplibregl-ctrl-attrib { background:rgba(19,22,33,.7) !important; color:var(--dim) !important; font-size:11px; }
+.maplibregl-ctrl-attrib a { color:var(--dim) !important; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="seg"><button id="bTrail" class="on">Moja trasa</button><button id="bArea">Okolica</button></div>
+<div id="msg"></div>
+<div id="sheet"></div>
+<script src="maplibre-gl.js"></script>
+<script>
+'use strict';
+const P = { bg:'#171b25', land:'#1a1f2a', water:'#1b2b38', water2:'#22374a', green:'#1b2520', bld:'#232a35', ext:'#2e3644',
+  minor:'#2a313d', major:'#3a4252', rail:'#2d333e', bound:'#474b58', txt:'#9aa5b3', halo:'#131621' };
+const C = { alert:'#E3907F', other:'#E8B86A', cell:'#E8B86A' };
+const $ = (id) => document.getElementById(id);
+let map = null, ready = false, mode = 'trail', data = { trail: [], cells: {}, me: null, from: '', to: '', server: false };
+let meMarker = null;
+
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+function msg(t) { $('msg').textContent = t || ''; $('msg').style.display = t ? 'block' : 'none'; }
+function time(t) { const d = new Date(t); return d.toLocaleDateString('pl-PL', { day:'2-digit', month:'2-digit' }) + ' ' + d.toLocaleTimeString('pl-PL', { hour:'2-digit', minute:'2-digit' }); }
+
+function recolor() {
+  for (const l of map.getStyle().layers) {
+    const id = l.id.toLowerCase();
+    try {
+      if (l.type === 'background') map.setPaintProperty(l.id, 'background-color', P.bg);
+      else if (l.type === 'fill') map.setPaintProperty(l.id, 'fill-color', /water|ocean|river|lake/.test(id) ? P.water : /park|grass|wood|forest|green|landcover|scrub|wetland|cemetery|pitch|garden/.test(id) ? P.green : /building/.test(id) ? P.bld : P.land);
+      else if (l.type === 'line') map.setPaintProperty(l.id, 'line-color', /water|river|stream|canal/.test(id) ? P.water2 : /rail|transit/.test(id) ? P.rail : /boundary|admin/.test(id) ? P.bound : /motorway|trunk|primary/.test(id) ? P.major : P.minor);
+      else if (l.type === 'fill-extrusion') map.setPaintProperty(l.id, 'fill-extrusion-color', P.ext);
+      else if (l.type === 'symbol') { map.setPaintProperty(l.id, 'text-color', P.txt); map.setPaintProperty(l.id, 'text-halo-color', P.halo); map.setPaintProperty(l.id, 'icon-opacity', 0.5); }
+    } catch (e) {}
+  }
+}
+
+function init() {
+  if (!window.maplibregl) { msg('Biblioteka mapy się nie wczytała.'); return; }
+  try {
+    map = new maplibregl.Map({ container:'map', style: window.__MAPSTYLE || 'https://tiles.openfreemap.org/styles/liberty',
+      center:[18.0, 53.0], zoom:5.3, attributionControl:{ compact:true }, fadeDuration:0, pitchWithRotate:false, dragRotate:false });
+  } catch (e) { msg('Mapa nie ruszyła na tym telefonie (WebGL): ' + e.message); return; }
+  const to = setTimeout(() => { if (!ready) msg('Mapa się nie wczytuje. Kafelki idą z internetu; trasa i lista niżej działają bez niego.'); }, 9000);
+  map.on('styleimagemissing', (e) => { try { if (!map.hasImage(e.id)) map.addImage(e.id, { width:1, height:1, data:new Uint8Array(4) }); } catch (x) {} });
+  map.on('load', () => {
+    clearTimeout(to); ready = true; msg(''); recolor();
+    const empty = { type:'FeatureCollection', features:[] };
+    for (const s of ['cells', 'lines', 'pts']) map.addSource(s, { type:'geojson', data:empty });
+    map.addLayer({ id:'cells', type:'fill', source:'cells', paint:{ 'fill-color':C.cell, 'fill-opacity':['get', 'op'] } });
+    map.addLayer({ id:'cellsl', type:'line', source:'cells', paint:{ 'line-color':C.cell, 'line-opacity':0.5, 'line-width':1 } });
+    map.addLayer({ id:'lines', type:'line', source:'lines', paint:{ 'line-color':['get', 'col'], 'line-width':3, 'line-opacity':0.85, 'line-dasharray':[2, 1.2] } });
+    map.addLayer({ id:'pts', type:'circle', source:'pts', paint:{ 'circle-radius':6, 'circle-color':['get', 'col'], 'circle-stroke-color':'#131621', 'circle-stroke-width':2 } });
+    map.on('click', 'pts', (e) => { const p = e.features[0].properties; new maplibregl.Popup({ closeButton:false }).setLngLat(e.lngLat).setHTML(`<b>${esc(p.tag)}</b><br>${esc(time(+p.t))}`).addTo(map); });
+    paint(true);
+  });
+}
+
+function cellPoly(key, grid) {
+  const [la, lo] = key.split(':').map(Number), h = grid / 2;
+  return [[[lo - h, la - h], [lo + h, la - h], [lo + h, la + h], [lo - h, la + h], [lo - h, la - h]]];
+}
+
+function bounds(coords) {
+  if (!coords.length) return null;
+  const b = new maplibregl.LngLatBounds(coords[0], coords[0]);
+  coords.forEach((c) => b.extend(c));
+  return b;
+}
+
+function paint(fit) {
+  sheet();
+  if (!ready) return;
+  const lines = [], pts = [], all = [];
+  const cells = [];
+  if (mode === 'trail') {
+    for (const t of data.trail) {
+      const col = t.alert ? C.alert : C.other;
+      const c = t.pts.map((p) => [p[0], p[1]]);
+      all.push(...c);
+      if (c.length > 1) lines.push({ type:'Feature', properties:{ col }, geometry:{ type:'LineString', coordinates:c } });
+      t.pts.forEach((p) => pts.push({ type:'Feature', properties:{ col, tag:t.tag, t:p[2] }, geometry:{ type:'Point', coordinates:[p[0], p[1]] } }));
+    }
+  } else {
+    const max = Math.max(1, ...Object.values(data.cells).map((c) => c.total));
+    for (const [k, c] of Object.entries(data.cells)) {
+      cells.push({ type:'Feature', properties:{ op: 0.15 + 0.45 * c.total / max }, geometry:{ type:'Polygon', coordinates:cellPoly(k, 0.02) } });
+      const [la, lo] = k.split(':').map(Number); all.push([lo, la]);
+    }
+  }
+  map.getSource('lines').setData({ type:'FeatureCollection', features:lines });
+  map.getSource('pts').setData({ type:'FeatureCollection', features:pts });
+  map.getSource('cells').setData({ type:'FeatureCollection', features:cells });
+  if (data.me) {
+    if (!meMarker) { const el = document.createElement('div'); el.className = 'me'; meMarker = new maplibregl.Marker({ element:el }).setLngLat([data.me.lon, data.me.lat]).addTo(map); }
+    else meMarker.setLngLat([data.me.lon, data.me.lat]);
+  }
+  if (!fit) return;
+  if (mode === 'area' && data.me) { map.jumpTo({ center:[data.me.lon, data.me.lat], zoom:11.5 }); return; }
+  const b = bounds(all);
+  if (b) map.fitBounds(b, { padding:{ top:80, bottom:220, left:40, right:40 }, maxZoom:15, duration:0 });
+  else if (data.me) map.jumpTo({ center:[data.me.lon, data.me.lat], zoom:13 });
+}
+
+function sheet() {
+  let h = '';
+  if (mode === 'trail') {
+    h += '<h3>TRACKERY PRZY TOBIE (7 DNI)</h3>';
+    if (!data.trail.length) h += '<div class="row"><small>Pusto i dobrze. Punkt pojawia się, gdy ten sam tracker jest przy tobie dłużej. Trasa zostaje tylko w telefonie.</small></div>';
+    for (const t of data.trail) {
+      const a = t.pts[0][2], z = t.pts[t.pts.length - 1][2];
+      h += `<div class="row" data-id="${esc(t.id)}"><span class="dot" style="background:${t.alert ? C.alert : C.other}"></span><div><b>${esc(t.tag)}${t.alert ? ' · alarm' : ''}</b><small>${t.pts.length} miejsc · ${esc(time(a))} – ${esc(time(z))}</small></div></div>`;
+    }
+    h += `<div class="legend"><span><i style="background:${C.alert}"></i>dał alarm</span><span><i style="background:${C.other}"></i>widziany przy tobie</span></div>`;
+  } else {
+    const n = Object.keys(data.cells).length;
+    h += '<h3>OKOLICA: ZGŁOSZENIA INNYCH</h3>';
+    if (!data.server) h += '<div class="row"><small>Wspólna mapa jeszcze nie działa (serwer nie jest ustawiony).</small></div>';
+    else if (!n) h += '<div class="row"><small>Brak zgłoszeń w danych z ' + esc(data.from || '–') + ' do ' + esc(data.to || '–') + '.</small></div>';
+    else h += `<div class="row"><small>${n} kratek z alarmami (${esc(data.from)} – ${esc(data.to)}). Kratka ok. 2 km, widoczna dopiero od 3 różnych telefonów, z opóźnieniem 2 dni: nikogo nie da się nią namierzyć.</small></div>`;
+    h += `<div class="legend"><span><i style="background:${C.cell}"></i>im mocniejszy kolor, tym więcej zgłoszeń</span></div>`;
+  }
+  $('sheet').innerHTML = h;
+  $('sheet').querySelectorAll('.row[data-id]').forEach((r) => r.onclick = () => focusId(r.dataset.id));
+}
+
+function focusId(id) {
+  const t = data.trail.find((x) => x.id === id);
+  if (!t || !ready) return;
+  const b = bounds(t.pts.map((p) => [p[0], p[1]]));
+  if (b) map.fitBounds(b, { padding:{ top:80, bottom:220, left:40, right:40 }, maxZoom:16 });
+}
+
+function setMode(m) {
+  mode = m;
+  $('bTrail').classList.toggle('on', m === 'trail');
+  $('bArea').classList.toggle('on', m === 'area');
+  paint(true);
+}
+$('bTrail').onclick = () => setMode('trail');
+$('bArea').onclick = () => setMode('area');
+
+// Wołane przez aplikację (evaluateJavascript); strona nie ma żadnego mostu do aplikacji.
+window.czujShow = function (d) {
+  data = Object.assign({ trail:[], cells:{}, me:null, from:'', to:'', server:false }, d || {});
+  paint(true);
+};
+window.czujMode = setMode;
+init();
+sheet();
+</script>
+</body>
+</html>

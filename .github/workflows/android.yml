@@ -2,7 +2,7 @@ name: Android
 on:
   push:
     branches: [main, 'ci/**']
-    paths: ['android/**', '.github/workflows/android.yml']
+    paths: ['android/**', 'wersja.json', '.github/workflows/android.yml']
   workflow_dispatch:
 # domyślnie tylko odczyt; zapis ma wyłącznie zadanie "publish"
 permissions:
@@ -89,8 +89,10 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           SUM=$(sha256sum out/czuj.apk | cut -d' ' -f1)
+          # wersja.json dla aplikacji: plik z repo (minimalna, linki, serwer) + numer tego builda
+          jq --argjson n "$GITHUB_RUN_NUMBER" '.najnowsza = $n' src/wersja.json > out/wersja.json
           gh release delete android-latest -R "$REPO" -y --cleanup-tag || true
-          gh release create android-latest out/czuj.apk -R "$REPO" --target "$GITHUB_SHA" \
+          gh release create android-latest out/czuj.apk out/wersja.json -R "$REPO" --target "$GITHUB_SHA" \
             --title "Czuj na Androida (najnowszy)" \
             --notes "Build ${GITHUB_SHA::7}, wersja 1.0.${GITHUB_RUN_NUMBER}.
           sha256: ${SUM}

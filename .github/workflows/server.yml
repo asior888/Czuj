@@ -1,0 +1,95 @@
+name: Serwer (Cloudflare)
+on:
+  push:
+    branches: [main, 'ci/**']
+    paths: ['server/**', '.github/workflows/server.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Testy (SQLite zamiast D1)
+        run: |
+          set -o pipefail
+          node --test server/test.mjs 2>&1 | grep -v ExperimentalWarning | tee test.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: server-test
+          path: test.log
+
+  deploy:
+    # prawdziwy serwer: tylko main, tylko po testach, tylko z sekretami
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      url: ${{ steps.d.outputs.url }}
+      state: ${{ steps.d.outputs.state }}
+    defaults:
+      run:
+        working-directory: server
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Wdrożenie
+        id: d
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::Brak sekretów CF_API_TOKEN / CF_ACCOUNT_ID: serwer nie wdrożony"
+            echo "state=brak-sekretow" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          W="npx --yes wrangler@4.20.0"
+          id() { $W d1 list --json 2>/dev/null | jq -r '.[] | select(.name=="czuj") | .uuid' | head -1; }
+          ID=$(id)
+          if [ -z "$ID" ]; then $W d1 create czuj --location weur; ID=$(id); fi
+          [ -n "$ID" ] || { echo "::error::Nie udało się założyć bazy D1"; exit 1; }
+          sed -i "s/WPISZE_WORKFLOW/$ID/" wrangler.toml
+          $W d1 execute czuj --remote --file schema.sql
+          $W deploy 2>&1 | tee deploy.log
+          openssl rand -hex 32 | $W secret put SALT
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          curl -fsS "$URL/v1/stats" && echo "state=ok" >> "$GITHUB_OUTPUT" || echo "state=bez-odpowiedzi" >> "$GITHUB_OUTPUT"
+
+  result:
+    needs: [test, deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-test
+          path: out
+      - name: Wynik do gałęzi cloud-result
+        env:
+          TESTS: ${{ needs.test.result }}
+          STATE: ${{ needs.deploy.outputs.state }}
+          URL: ${{ needs.deploy.outputs.url }}
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/r && cd /tmp/r && git init -q && git checkout -q -b cloud-result
+          printf 'testy=%s serwer=%s %s\nurl=%s\n' "$TESTS" "${STATE:-pominiete}" "$GITHUB_SHA" "$URL" > outcome.txt
+          cp "$GITHUB_WORKSPACE"/out/*.log . 2>/dev/null || true
+          git add . && git -c user.name=ci -c user.email=ci@example.com commit -qm "cloud result ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" cloud-result

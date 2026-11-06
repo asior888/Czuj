@@ -33,7 +33,7 @@
         android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher"
         android:label="Czuj"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:theme="@style/Czuj">
 
         <activity
             android:name=".MainActivity"
@@ -50,5 +50,9 @@
             android:name=".GuardService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <receiver
+            android:name=".MineReceiver"
+            android:exported="false" />
     </application>
 </manifest>

@@ -12,6 +12,8 @@ object Voice : TextToSpeech.OnInitListener {
         private set
     private var tts: TextToSpeech? = null
     private val pending = ArrayList<String>()
+    /** Tempo mowy z ustawień (0,8 / 1,0 / 1,25). */
+    @Volatile var rate = 1.0f
 
     @Synchronized fun init(ctx: Context) {
         if (tts == null) tts = TextToSpeech(ctx.applicationContext, this)
@@ -32,7 +34,10 @@ object Voice : TextToSpeech.OnInitListener {
         if (ready) speakNow(text) else if (!failed) pending.add(text)
     }
 
+    @Synchronized fun stop() { try { tts?.stop() } catch (e: Exception) { } }
+
     private fun speakNow(text: String) {
+        tts?.setSpeechRate(rate)
         tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "czuj" + System.nanoTime())
     }
 }

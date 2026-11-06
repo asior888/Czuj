@@ -1,0 +1,17 @@
+# Konfiguracja Workera. database_id wpisuje workflow „Serwer (Cloudflare)” (baza zakładana automatycznie).
+name = "czuj"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+# Bez dzienników żądań: serwer nie zbiera IP ani nagłówków (zasada „nikt nie ma dostępu”).
+[observability]
+enabled = false
+
+[triggers]
+crons = ["17 3 * * *"]   # codziennie 03:17 UTC: agregacja mapy i kasowanie starych zgłoszeń
+
+[[d1_databases]]
+binding = "DB"
+database_name = "czuj"
+database_id = "WPISZE_WORKFLOW"
