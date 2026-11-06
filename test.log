@@ -1,0 +1,59 @@
+TAP version 13
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: kratka: tylko siatka 0,02 i zakresy
+ok 1 - kratka: tylko siatka 0,02 i zakresy
+  ---
+  duration_ms: 1.527296
+  type: 'test'
+  ...
+# Subtest: zgłoszenie: poprawne przyjęte, powtórka tego samego dnia nie liczy się
+ok 2 - zgłoszenie: poprawne przyjęte, powtórka tego samego dnia nie liczy się
+  ---
+  duration_ms: 35.633344
+  type: 'test'
+  ...
+# Subtest: zgłoszenie: odrzuca złe pola i dodatkowe dane nie trafiają do bazy
+ok 3 - zgłoszenie: odrzuca złe pola i dodatkowe dane nie trafiają do bazy
+  ---
+  duration_ms: 5.74953
+  type: 'test'
+  ...
+# Subtest: limit z jednego IP na dobę, IP nie zapisany w bazie
+ok 4 - limit z jednego IP na dobę, IP nie zapisany w bazie
+  ---
+  duration_ms: 5.683091
+  type: 'test'
+  ...
+# Subtest: mapa: kratka dopiero od 3 urządzeń, z opóźnieniem 2 dni, okno 7 dni
+ok 5 - mapa: kratka dopiero od 3 urządzeń, z opóźnieniem 2 dni, okno 7 dni
+  ---
+  duration_ms: 1.562419
+  type: 'test'
+  ...
+# Subtest: mapa pusta przed pierwszą agregacją
+ok 6 - mapa pusta przed pierwszą agregacją
+  ---
+  duration_ms: 0.512153
+  type: 'test'
+  ...
+# Subtest: diagnostyka: tylko licznik, bez numeru instalacji
+ok 7 - diagnostyka: tylko licznik, bez numeru instalacji
+  ---
+  duration_ms: 3.567107
+  type: 'test'
+  ...
+# Subtest: nieznana ścieżka 404, błąd bazy nie zdradza szczegółów
+ok 8 - nieznana ścieżka 404, błąd bazy nie zdradza szczegółów
+  ---
+  duration_ms: 0.899381
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 103.938256
