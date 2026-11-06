@@ -98,7 +98,7 @@ class SettingsTab(private val act: MainActivity, private val ui: Ui) {
         // ---------- o aplikacji ----------
         col.addView(ui.card(
             ui.label("O aplikacji"),
-            ui.text("Czuj, wersja ${Updates.myCode(act)}", 15f),
+            ui.text("Czuj ${act.packageManager.getPackageInfo(act.packageName, 0).versionName}", 15f),
             ui.button("Sprawdź aktualizacje") { act.checkUpdates(true) },
             ui.text("Czuj jest darmowy i bez reklam. Jeśli chcesz, możesz wesprzeć jego rozwój.", 13.5f, C.DIM).apply { setPadding(0, ui.dp(12), 0, 0) },
             ui.button("Wesprzyj Czuj ☕", primary = true) { act.run(Commands.Cmd.Support) },
