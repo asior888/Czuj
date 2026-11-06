@@ -1,0 +1,12 @@
+total 2000
+drwxr-xr-x 3 runner runner    4096 Nov  6 19:26 .
+drwxr-xr-x 4 runner runner    4096 Nov  6 19:26 ..
+-rw-r--r-- 1 runner runner    5074 Nov  6 19:26 build.log
+-rw-r--r-- 1 runner runner     106 Nov  6 19:26 cert.txt
+-rw-r--r-- 1 runner runner  992311 Nov  6 19:26 czuj-unsigned.apk
+-rw-r--r-- 1 runner runner 1005606 Nov  6 19:26 czuj.apk
+-rw-r--r-- 1 runner runner   14722 Nov  6 19:26 czuj.apk.idsig
+drwxr-xr-x 3 runner runner    4096 Nov  6 19:26 tests
+-rw-r--r-- 1 runner runner     186 Nov  6 19:26 wersja.json
+ce7ff91b1e08ad52fae1024367a0a5c0d7eefce5aa41650733f93f18265c49e5  /home/runner/work/Czuj/Czuj/out/czuj.apk
+podpis: true

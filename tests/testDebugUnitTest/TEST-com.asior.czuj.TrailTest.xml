@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.asior.czuj.TrailTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-06T19:26:15.647Z" hostname="runnervmwuk1x" time="0.012">
+  <properties/>
+  <testcase name="jsonSafe" classname="com.asior.czuj.TrailTest" time="0.011"/>
+  <testcase name="encodeDecode" classname="com.asior.czuj.TrailTest" time="0.001"/>
+  <testcase name="throttleAndKeep" classname="com.asior.czuj.TrailTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
